@@ -65,20 +65,15 @@ Include these clearly labeled sections:
 Be specific, creative, practical, and immediately usable by a teacher.`;
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 1500,
-          messages: [{ role: "user", content: prompt }]
-        })
+        body: JSON.stringify({ prompt })
       });
       const json = await res.json();
-      if (json.error) { setError("Error: " + json.error.message); return; }
-      const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-      if (!text) { setError("Nothing returned. Please try again."); return; }
-      setResult(text);
+      if (json.error) { setError("Error: " + json.error); return; }
+      if (!json.text) { setError("Nothing returned. Please try again."); return; }
+      setResult(json.text);
     } catch (e) {
       setError("Request failed: " + e.message);
     } finally {

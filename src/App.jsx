@@ -393,18 +393,5 @@ Be specific, creative, practical, and immediately usable by a teacher.`;
     </div>
   );
 }
-```
-
-4. Commit
-
----
-
-**After you do both, your repo structure should be:**
-```
-lessonplangenerator/
-├── index.html
-├── package.json
-├── vite.config.js
-└── src/
     ├── main.jsx
     └── App.jsx

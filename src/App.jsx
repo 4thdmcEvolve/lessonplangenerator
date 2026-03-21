@@ -393,5 +393,3 @@ Be specific, creative, practical, and immediately usable by a teacher.`;
     </div>
   );
 }
-    ├── main.jsx
-    └── App.jsx

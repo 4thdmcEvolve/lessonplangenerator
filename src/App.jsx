@@ -41,10 +41,10 @@ export default function App() {
     setResult("");
     setLoading(true);
 
-    const prompt = `You are an expert curriculum designer. Create a detailed, engaging lesson plan.
+   const prompt = `You are an expert curriculum designer. Create a focused, practical lesson plan.
 
 CRITICAL FORMATTING RULES:
-- Use PLAIN TEXT only. No markdown, no asterisks, no hashtags, no bullet symbols.
+- Use PLAIN TEXT only. No markdown, no asterisks, no hashtags, no backticks, no code blocks.
 - Use numbered sections (1. 2. 3.) and lettered sub-points (a. b. c.) for organization.
 - Use simple dashes (-) for list items if needed.
 - Write in a clean, professional format that can be copied directly into any document.
@@ -54,8 +54,14 @@ ACCURACY REQUIREMENT:
 - Double-check grammar, spelling, and factual accuracy in all examples.
 - Incorrect examples must actually be incorrect. Correct examples must actually be correct.
 
+LENGTH REQUIREMENT:
+- Keep each section CONCISE: 3-5 bullet points or one short paragraph per section.
+- Do not over-elaborate. Teachers can adapt and expand.
+- A complete, shorter plan is better than an incomplete detailed one.
+- Total length should be under 800 words.
+
 COMPLETION REQUIREMENT:
-- You MUST complete ALL sections fully. Do not stop mid-sentence or skip sections.
+- You MUST complete ALL 9 sections. Do not stop mid-sentence or skip sections.
 - Every section must have substantive content, not placeholders.
 
 Subject: ${subject}
@@ -66,19 +72,19 @@ Learning Style Focus: ${learningStyle}
 ${standard ? `Standards/Objectives: ${standard}` : ""}
 ${extras ? `Special Notes: ${extras}` : ""}
 
-Create these sections with full content for each:
+Create these sections (keep each section brief but useful):
 
-1. Learning Objectives (3-5 specific, measurable objectives)
-2. Materials Needed (physical and digital)
-3. Warm-Up / Hook (first 5-10 minutes - engage students immediately)
-4. Direct Instruction (clear teaching sequence)
-5. Guided Practice (teacher-supported activities)
+1. Learning Objectives (3-4 measurable objectives)
+2. Materials Needed (brief list)
+3. Warm-Up / Hook (5-10 min activity)
+4. Direct Instruction (key teaching points)
+5. Guided Practice (teacher-supported activity)
 6. Independent Practice (student work)
-7. Assessment / Exit Ticket (how to measure understanding)
-8. Differentiation Strategies (for different learner needs)
-9. Extension Activities (for early finishers or enrichment)
+7. Assessment / Exit Ticket (how to check understanding)
+8. Differentiation Strategies (quick adaptations)
+9. Extension Activities (for early finishers)
 
-Be specific, creative, practical, and immediately usable by a teacher. Complete every section.`;
+Be specific, practical, and immediately usable. Complete every section.`;
 
     try {
       const res = await fetch("/api/generate", {

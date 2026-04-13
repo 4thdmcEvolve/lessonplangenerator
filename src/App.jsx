@@ -41,7 +41,22 @@ export default function App() {
     setResult("");
     setLoading(true);
 
-    const prompt = `You are an expert curriculum designer. Create a detailed, engaging lesson plan:
+    const prompt = `You are an expert curriculum designer. Create a detailed, engaging lesson plan.
+
+CRITICAL FORMATTING RULES:
+- Use PLAIN TEXT only. No markdown, no asterisks, no hashtags, no bullet symbols.
+- Use numbered sections (1. 2. 3.) and lettered sub-points (a. b. c.) for organization.
+- Use simple dashes (-) for list items if needed.
+- Write in a clean, professional format that can be copied directly into any document.
+
+ACCURACY REQUIREMENT:
+- If you include examples of correct vs incorrect usage, VERIFY each one is accurate.
+- Double-check grammar, spelling, and factual accuracy in all examples.
+- Incorrect examples must actually be incorrect. Correct examples must actually be correct.
+
+COMPLETION REQUIREMENT:
+- You MUST complete ALL sections fully. Do not stop mid-sentence or skip sections.
+- Every section must have substantive content, not placeholders.
 
 Subject: ${subject}
 Grade Level: ${grade}
@@ -51,18 +66,19 @@ Learning Style Focus: ${learningStyle}
 ${standard ? `Standards/Objectives: ${standard}` : ""}
 ${extras ? `Special Notes: ${extras}` : ""}
 
-Include these clearly labeled sections:
-1. Learning Objectives
-2. Materials Needed
-3. Warm-Up / Hook (first 5-10 minutes)
-4. Direct Instruction
-5. Guided Practice
-6. Independent Practice
-7. Assessment / Exit Ticket
-8. Differentiation Strategies
-9. Extension Activities
+Create these sections with full content for each:
 
-Be specific, creative, practical, and immediately usable by a teacher.`;
+1. Learning Objectives (3-5 specific, measurable objectives)
+2. Materials Needed (physical and digital)
+3. Warm-Up / Hook (first 5-10 minutes - engage students immediately)
+4. Direct Instruction (clear teaching sequence)
+5. Guided Practice (teacher-supported activities)
+6. Independent Practice (student work)
+7. Assessment / Exit Ticket (how to measure understanding)
+8. Differentiation Strategies (for different learner needs)
+9. Extension Activities (for early finishers or enrichment)
+
+Be specific, creative, practical, and immediately usable by a teacher. Complete every section.`;
 
     try {
       const res = await fetch("/api/generate", {

@@ -18,7 +18,7 @@ function useMediaQuery(query) {
 
 export default function App() {
   const isDesktop = useMediaQuery("(min-width: 768px)");
-  
+
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [topic, setTopic] = useState("");
@@ -32,6 +32,38 @@ export default function App() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // Password gate state
+  const [unlocked, setUnlocked] = useState(
+    typeof window !== "undefined" && localStorage.getItem("toolkit_unlocked") === "yes"
+  );
+  const [pwInput, setPwInput] = useState("");
+  const [authChecking, setAuthChecking] = useState(false);
+  const [authError, setAuthError] = useState("");
+
+  const tryUnlock = async () => {
+    if (!pwInput.trim() || authChecking) return;
+    setAuthChecking(true);
+    setAuthError("");
+    try {
+      const r = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwInput.trim() }),
+      });
+      if (r.ok) {
+        localStorage.setItem("toolkit_password", pwInput.trim());
+        localStorage.setItem("toolkit_unlocked", "yes");
+        setUnlocked(true);
+      } else {
+        setAuthError("Incorrect password. Try again.");
+      }
+    } catch (err) {
+      setAuthError("Connection error. Try again.");
+    } finally {
+      setAuthChecking(false);
+    }
+  };
+
   const generate = async () => {
     if (!subject || !grade || !topic) {
       setError("Please fill in Subject, Grade Level, and Topic.");
@@ -41,7 +73,7 @@ export default function App() {
     setResult("");
     setLoading(true);
 
-   const prompt = `You are an expert curriculum designer. Create a focused, practical lesson plan.
+    const prompt = `You are an expert curriculum designer. Create a focused, practical lesson plan.
 
 CRITICAL FORMATTING RULES:
 - Use PLAIN TEXT only. No markdown, no asterisks, no hashtags, no backticks, no code blocks.
@@ -90,12 +122,27 @@ Be specific, practical, and immediately usable. Complete every section.`;
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1500,
+          messages: [{ role: "user", content: prompt }],
+          toolkitPassword: localStorage.getItem("toolkit_password") || "",
+        }),
       });
       const json = await res.json();
-      if (json.error) { setError("Error: " + json.error); return; }
-      if (!json.text) { setError("Nothing returned. Please try again."); return; }
-      setResult(json.text);
+      if (json.error) {
+        if (json.error.code === "AUTH_REQUIRED") {
+          localStorage.removeItem("toolkit_unlocked");
+          localStorage.removeItem("toolkit_password");
+          setUnlocked(false);
+          setError("That password is no longer valid. Please re-enter.");
+          return;
+        }
+        setError("Error: " + json.error.message); return;
+      }
+      const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+      if (!text) { setError("Nothing returned. Please try again."); return; }
+      setResult(text);
     } catch (e) {
       setError("Request failed: " + e.message);
     } finally {
@@ -157,13 +204,79 @@ Be specific, practical, and immediately usable. Complete every section.`;
     ...extra,
   });
 
+  // PASSWORD GATE — Early return before either view renders
+  if (!unlocked) {
+    return (
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: `linear-gradient(160deg, ${DARK} 0%, ${NAVY} 100%)`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "'Segoe UI', system-ui, sans-serif", padding: 20,
+      }}>
+        <div style={{
+          maxWidth: 380, width: "100%", textAlign: "center",
+          background: "rgba(255,255,255,0.04)", border: "1px solid rgba(201,168,76,0.25)",
+          borderRadius: 12, padding: "40px 32px",
+        }}>
+          <div style={{
+            display: "inline-block", border: `1px solid ${GOLD}`, color: GOLD,
+            fontSize: 10, letterSpacing: 4, padding: "4px 14px", marginBottom: 20,
+            fontWeight: 700, borderRadius: 2, textTransform: "uppercase",
+            fontFamily: "monospace",
+          }}>4THDMC | EVOLVE LLC</div>
+          <div style={{ fontFamily: "Georgia, serif", fontSize: 26, fontWeight: 900, color: "#fff", marginBottom: 10 }}>
+            Lesson Plan Generator
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, marginBottom: 28, lineHeight: 1.5 }}>
+            Enter your access password to continue.
+          </div>
+          <input
+            type="password"
+            value={pwInput}
+            disabled={authChecking}
+            onChange={(e) => { setPwInput(e.target.value); setAuthError(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") tryUnlock(); }}
+            placeholder="Access password"
+            style={{
+              width: "100%", boxSizing: "border-box", padding: "13px 16px",
+              background: "rgba(255,255,255,0.07)",
+              border: `1px solid ${authError ? "rgba(255,80,80,0.5)" : "rgba(255,255,255,0.2)"}`,
+              borderRadius: 8, color: "#fff", fontSize: 15, outline: "none",
+              marginBottom: authError ? 8 : 16, opacity: authChecking ? 0.6 : 1,
+            }}
+          />
+          {authError && (
+            <div style={{ color: "#ff9090", fontSize: 12, marginBottom: 16, textAlign: "left" }}>
+              ⚠ {authError}
+            </div>
+          )}
+          <button
+            disabled={authChecking || !pwInput.trim()}
+            onClick={tryUnlock}
+            style={{
+              width: "100%", padding: 14,
+              background: authChecking ? "rgba(201,168,76,0.5)" : GOLD,
+              color: DARK, border: "none", borderRadius: 8, fontWeight: 900,
+              fontSize: 14, letterSpacing: 2,
+              cursor: authChecking ? "wait" : "pointer", textTransform: "uppercase",
+            }}
+          >{authChecking ? "Checking..." : "Unlock Tool"}</button>
+          <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 12, marginTop: 20, lineHeight: 1.5 }}>
+            Not a subscriber yet? Visit brrteaching.com to join.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // MOBILE VIEW
   if (!isDesktop) {
     return (
       <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${DARK}, ${NAVY})`, fontFamily: "'Segoe UI', system-ui, sans-serif", padding: "0 0 80px" }}>
-        
+
         <div style={{ textAlign: "center", padding: "40px 20px 28px" }}>
           <div style={{ display: "inline-block", border: `1px solid ${GOLD}`, color: GOLD, fontSize: 10, letterSpacing: 4, padding: "5px 14px", marginBottom: 14, fontWeight: 700, borderRadius: 2 }}>
-            4THDMC | EVOLVE
+            4THDMC | EVOLVE LLC
           </div>
           <div style={{ fontSize: "clamp(32px, 9vw, 52px)", fontWeight: 900, color: "#fff", lineHeight: 1.1, letterSpacing: 1 }}>
             LESSON PLAN<br /><span style={{ color: GOLD }}>GENERATOR</span>
@@ -280,19 +393,21 @@ Be specific, practical, and immediately usable. Complete every section.`;
           </div>
         )}
 
-        <div style={{ textAlign: "center", marginTop: 48, color: "rgba(255,255,255,0.18)", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", padding: "0 16px" }}>
-          Powered by <span style={{ color: "rgba(201,168,76,0.35)" }}>4THDMC | EVOLVE</span> · Brandon Russell
+        <div style={{ textAlign: "center", marginTop: 48, color: "rgba(255,255,255,0.18)", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", padding: "0 16px 24px" }}>
+          <div>© 2025 <span style={{ color: "rgba(201,168,76,0.55)" }}>4THDMC | EVOLVE LLC</span> · All Rights Reserved</div>
+          <div style={{ marginTop: 6, fontSize: 9, letterSpacing: 2, color: "rgba(255,255,255,0.12)" }}>Brandon Russell · The Multiplier · Chattanooga, TN</div>
         </div>
       </div>
     );
   }
 
+  // DESKTOP VIEW
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${DARK} 0%, ${NAVY} 60%, ${DARK} 100%)`, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
 
       <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "16px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontWeight: 900, fontSize: 18, color: "#fff", letterSpacing: 1 }}>
-          4THDMC <span style={{ color: GOLD }}>|</span> EVOLVE
+          4THDMC <span style={{ color: GOLD }}>|</span> EVOLVE LLC
         </div>
         <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, fontStyle: "italic" }}>
           Lesson Plan Generator
@@ -405,7 +520,8 @@ Be specific, practical, and immediately usable. Complete every section.`;
       </div>
 
       <div style={{ textAlign: "center", paddingBottom: 32, color: "rgba(255,255,255,0.18)", fontSize: 10, letterSpacing: 3, textTransform: "uppercase" }}>
-        Powered by <span style={{ color: "rgba(201,168,76,0.35)" }}>4THDMC | EVOLVE LLC</span> · Brandon Russell
+        <div>© 2025 <span style={{ color: "rgba(201,168,76,0.55)" }}>4THDMC | EVOLVE LLC</span> · All Rights Reserved</div>
+        <div style={{ marginTop: 6, fontSize: 9, letterSpacing: 2, color: "rgba(255,255,255,0.12)" }}>Brandon Russell · The Multiplier · Chattanooga, TN</div>
       </div>
     </div>
   );

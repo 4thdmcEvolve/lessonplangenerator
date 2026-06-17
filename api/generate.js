@@ -45,6 +45,18 @@
 // verify-facts or both, generate) for almost every request, since the
 // pipeline always runs. Frontend still makes ONE request and waits once.
 
+// Raises this function's timeout on Vercel from the 30-second default.
+// This pipeline makes up to 5 sequential Anthropic calls (plan, fact-check
+// with web search, math solve, math verify, final generation) — the
+// fact-check web search step in particular can push total time well past
+// 30 seconds. Vercel Pro supports up to 300s without extra config (and up
+// to 800s with explicit setup) — set to 120s here for real headroom above
+// what a 5-call pipeline should realistically need, while staying well
+// within Pro's standard allowance.
+export const config = {
+  maxDuration: 120,
+};
+
 const rateLimitStore = new Map();
 const MAX_REQUESTS_PER_WINDOW = 40;
 const WINDOW_MS = 60 * 60 * 1000;

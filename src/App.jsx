@@ -31,6 +31,9 @@ export default function App() {
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [verificationRan, setVerificationRan] = useState(false);
+  const [verificationType, setVerificationType] = useState("");
+  const [computationalPassed, setComputationalPassed] = useState(null);
 
   const [unlocked, setUnlocked] = useState(
     typeof window !== "undefined" && localStorage.getItem("toolkit_unlocked") === "yes"
@@ -72,61 +75,18 @@ export default function App() {
     setResult("");
     setLoading(true);
 
-    const prompt = `You are an expert curriculum designer. Create a focused, practical lesson plan.
-
-CRITICAL FORMATTING RULES:
-- Use PLAIN TEXT only. No markdown, no asterisks, no hashtags, no backticks, no code blocks.
-- Use numbered sections (1. 2. 3.) and lettered sub-points (a. b. c.) for organization.
-- Use simple dashes (-) for list items if needed.
-- Write in a clean, professional format that can be copied directly into any document.
-
-ACCURACY REQUIREMENT:
-- If you include examples of correct vs incorrect usage, VERIFY each one is accurate.
-- Double-check grammar, spelling, and factual accuracy in all examples.
-- Incorrect examples must actually be incorrect. Correct examples must actually be correct.
-
-LENGTH REQUIREMENT:
-- Keep each section CONCISE: 3-5 bullet points or one short paragraph per section.
-- Do not over-elaborate. Teachers can adapt and expand.
-- A complete, shorter plan is better than an incomplete detailed one.
-- Total length should be under 800 words.
-
-COMPLETION REQUIREMENT:
-- You MUST complete ALL 8 sections. Do not stop mid-sentence or skip sections.
-- Every section must have substantive content, not placeholders.
-- Before ending your response, confirm the final section (Extension Activities) is fully written with a complete closing sentence, not cut off mid-thought.
-
-Subject: ${subject}
-Grade Level: ${grade}
-Topic: ${topic}
-Duration: ${duration} minutes
-Learning Style Focus: ${learningStyle}
-${standard ? `Standards/Objectives: ${standard}` : ""}
-${extras ? `Special Notes: ${extras}` : ""}
-
-Create these sections (keep each section brief but useful):
-
-1. Learning Objectives (3-4 measurable objectives)
-2. Materials Needed (brief list)
-3. Warm-Up / Hook (5-10 min activity)
-4. Direct Instruction (key teaching points)
-5. Guided Practice (teacher-supported activity)
-6. Independent Practice (student work)
-7. Assessment / Exit Ticket (how to check understanding)
-8. Extension Activities (for early finishers)
-
-Do NOT include a Differentiation Strategies section — differentiation is handled by a separate dedicated tool in this toolkit, not by this lesson plan.
-
-Be specific, practical, and immediately usable. Complete every section.`;
-
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 2000,
-          messages: [{ role: "user", content: prompt }],
+          subject,
+          grade,
+          topic,
+          duration,
+          learningStyle,
+          standard,
+          extras,
           toolkitPassword: localStorage.getItem("toolkit_password") || "",
         }),
       });
@@ -141,9 +101,11 @@ Be specific, practical, and immediately usable. Complete every section.`;
         }
         setError("Error: " + json.error.message); return;
       }
-      const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-      if (!text) { setError("Nothing returned. Please try again."); return; }
-      setResult(text);
+      if (!json.text) { setError("Nothing returned. Please try again."); return; }
+      setResult(json.text);
+      setVerificationRan(json.verificationRan);
+      setVerificationType(json.verificationType || "");
+      setComputationalPassed(json.computationalPassed);
     } catch (e) {
       setError("Request failed: " + e.message);
     } finally {
@@ -160,6 +122,9 @@ Be specific, practical, and immediately usable. Complete every section.`;
   const reset = () => {
     setResult("");
     setError("");
+    setVerificationRan(false);
+    setVerificationType("");
+    setComputationalPassed(null);
   };
 
   const renderResult = (text) =>
@@ -380,7 +345,23 @@ Be specific, practical, and immediately usable. Complete every section.`;
                 <div style={{ color: "#999", fontSize: 12, marginTop: 4 }}>{grade} Grade · {subject} · {duration} min</div>
               </div>
               <div>{renderResult(result)}</div>
-              <div style={{ background: "rgba(201,168,76,0.08)", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "14px 16px", marginTop: 18, fontSize: 13, color: "#444", lineHeight: 1.6 }}>
+              <div style={{
+                background: computationalPassed === false ? "rgba(255,176,102,0.12)" : "rgba(255,255,255,0.5)",
+                border: computationalPassed === false ? "1px solid rgba(255,176,102,0.5)" : "1px solid rgba(0,0,0,0.08)",
+                borderRadius: 10, padding: "12px 14px", marginTop: 18, fontSize: 12,
+                color: computationalPassed === false ? "#b35900" : "#777", lineHeight: 1.6,
+              }}>
+                {!verificationRan && <span>No factual or computational content needed verification for this topic.</span>}
+                {verificationRan && computationalPassed === false && (
+                  <><strong>⚠ Math could not be independently verified.</strong> Simpler, generic examples were used instead. Review before using with students.</>
+                )}
+                {verificationRan && computationalPassed !== false && (
+                  <><strong style={{ color: NAVY }}>
+                    {verificationType === "both" ? "Facts and math both verified before writing this lesson." : verificationType === "math" ? "Math independently verified using two methods before writing this lesson." : "Facts verified via web search before writing this lesson."}
+                  </strong></>
+                )}
+              </div>
+              <div style={{ background: "rgba(201,168,76,0.08)", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "14px 16px", marginTop: 12, fontSize: 13, color: "#444", lineHeight: 1.6 }}>
                 <strong style={{ color: NAVY }}>Need differentiation strategies for this lesson?</strong> Paste this lesson plan into the{" "}
                 <a href="https://differentiation-helper.vercel.app" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
                   Differentiation Helper
@@ -512,7 +493,24 @@ Be specific, practical, and immediately usable. Complete every section.`;
 
             <div>{renderResult(result)}</div>
 
-            <div style={{ background: "rgba(201,168,76,0.08)", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "14px 16px", marginTop: 20, fontSize: 13, color: "#444", lineHeight: 1.6 }}>
+            <div style={{
+              background: computationalPassed === false ? "rgba(255,176,102,0.12)" : "rgba(255,255,255,0.5)",
+              border: computationalPassed === false ? "1px solid rgba(255,176,102,0.5)" : "1px solid rgba(0,0,0,0.08)",
+              borderRadius: 10, padding: "12px 14px", marginTop: 20, fontSize: 12,
+              color: computationalPassed === false ? "#b35900" : "#777", lineHeight: 1.6,
+            }}>
+              {!verificationRan && <span>No factual or computational content needed verification for this topic.</span>}
+              {verificationRan && computationalPassed === false && (
+                <><strong>⚠ Math could not be independently verified.</strong> Simpler, generic examples were used instead. Review before using with students.</>
+              )}
+              {verificationRan && computationalPassed !== false && (
+                <><strong style={{ color: NAVY }}>
+                  {verificationType === "both" ? "Facts and math both verified before writing this lesson." : verificationType === "math" ? "Math independently verified using two methods before writing this lesson." : "Facts verified via web search before writing this lesson."}
+                </strong></>
+              )}
+            </div>
+
+            <div style={{ background: "rgba(201,168,76,0.08)", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "14px 16px", marginTop: 12, fontSize: 13, color: "#444", lineHeight: 1.6 }}>
               <strong style={{ color: NAVY }}>Need differentiation strategies for this lesson?</strong> Paste this lesson plan into the{" "}
               <a href="https://differentiation-helper.vercel.app" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
                 Differentiation Helper

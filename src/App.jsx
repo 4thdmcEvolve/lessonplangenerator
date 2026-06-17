@@ -332,6 +332,11 @@ export default function App() {
               }}>
                 {loading ? "⏳ Generating..." : "GENERATE LESSON PLAN"}
               </button>
+              <div style={{ textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>
+                {loading
+                  ? "This can take up to a minute or two — it's running multiple accuracy checks behind the scenes. No need to refresh or click again."
+                  : "Generation includes built-in fact and math verification, so it may take longer than a typical AI tool (up to ~60–90 seconds)."}
+              </div>
             </div>
           </div>
         )}
@@ -478,6 +483,11 @@ export default function App() {
             }}>
               {loading ? "⏳  Generating Your Lesson Plan..." : "GENERATE LESSON PLAN"}
             </button>
+            <div style={{ textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>
+              {loading
+                ? "This can take up to a minute or two — it's running multiple accuracy checks behind the scenes. No need to refresh or click again."
+                : "Generation includes built-in fact and math verification, so it may take longer than a typical AI tool (up to ~60–90 seconds)."}
+            </div>
           </div>
         </div>
 

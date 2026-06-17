@@ -32,7 +32,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  // Password gate state
   const [unlocked, setUnlocked] = useState(
     typeof window !== "undefined" && localStorage.getItem("toolkit_unlocked") === "yes"
   );
@@ -93,8 +92,9 @@ LENGTH REQUIREMENT:
 - Total length should be under 800 words.
 
 COMPLETION REQUIREMENT:
-- You MUST complete ALL 9 sections. Do not stop mid-sentence or skip sections.
+- You MUST complete ALL 8 sections. Do not stop mid-sentence or skip sections.
 - Every section must have substantive content, not placeholders.
+- Before ending your response, confirm the final section (Extension Activities) is fully written with a complete closing sentence, not cut off mid-thought.
 
 Subject: ${subject}
 Grade Level: ${grade}
@@ -113,8 +113,9 @@ Create these sections (keep each section brief but useful):
 5. Guided Practice (teacher-supported activity)
 6. Independent Practice (student work)
 7. Assessment / Exit Ticket (how to check understanding)
-8. Differentiation Strategies (quick adaptations)
-9. Extension Activities (for early finishers)
+8. Extension Activities (for early finishers)
+
+Do NOT include a Differentiation Strategies section — differentiation is handled by a separate dedicated tool in this toolkit, not by this lesson plan.
 
 Be specific, practical, and immediately usable. Complete every section.`;
 
@@ -124,7 +125,7 @@ Be specific, practical, and immediately usable. Complete every section.`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 1500,
+          max_tokens: 2000,
           messages: [{ role: "user", content: prompt }],
           toolkitPassword: localStorage.getItem("toolkit_password") || "",
         }),
@@ -204,7 +205,6 @@ Be specific, practical, and immediately usable. Complete every section.`;
     ...extra,
   });
 
-  // PASSWORD GATE — Early return before either view renders
   if (!unlocked) {
     return (
       <div style={{
@@ -269,7 +269,6 @@ Be specific, practical, and immediately usable. Complete every section.`;
     );
   }
 
-  // MOBILE VIEW
   if (!isDesktop) {
     return (
       <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${DARK}, ${NAVY})`, fontFamily: "'Segoe UI', system-ui, sans-serif", padding: "0 0 80px" }}>
@@ -381,7 +380,14 @@ Be specific, practical, and immediately usable. Complete every section.`;
                 <div style={{ color: "#999", fontSize: 12, marginTop: 4 }}>{grade} Grade · {subject} · {duration} min</div>
               </div>
               <div>{renderResult(result)}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 22 }}>
+              <div style={{ background: "rgba(201,168,76,0.08)", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "14px 16px", marginTop: 18, fontSize: 13, color: "#444", lineHeight: 1.6 }}>
+                <strong style={{ color: NAVY }}>Need differentiation strategies for this lesson?</strong> Paste this lesson plan into the{" "}
+                <a href="https://differentiation-helper.vercel.app" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
+                  Differentiation Helper
+                </a>{" "}
+                to get specific adaptations for struggling learners, advanced students, and different learning styles.
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
                 <button onClick={copy} style={{ padding: 15, background: NAVY, color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
                   {copied ? "✓ Copied!" : "📋 Copy to Clipboard"}
                 </button>
@@ -401,7 +407,6 @@ Be specific, practical, and immediately usable. Complete every section.`;
     );
   }
 
-  // DESKTOP VIEW
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${DARK} 0%, ${NAVY} 60%, ${DARK} 100%)`, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
 
@@ -507,7 +512,15 @@ Be specific, practical, and immediately usable. Complete every section.`;
 
             <div>{renderResult(result)}</div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 24, flexWrap: "wrap" }}>
+            <div style={{ background: "rgba(201,168,76,0.08)", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "14px 16px", marginTop: 20, fontSize: 13, color: "#444", lineHeight: 1.6 }}>
+              <strong style={{ color: NAVY }}>Need differentiation strategies for this lesson?</strong> Paste this lesson plan into the{" "}
+              <a href="https://differentiation-helper.vercel.app" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
+                Differentiation Helper
+              </a>{" "}
+              to get specific adaptations for struggling learners, advanced students, and different learning styles.
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
               <button onClick={copy} style={{ flex: 1, padding: "12px 16px", background: NAVY, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", letterSpacing: 1, textTransform: "uppercase" }}>
                 {copied ? "✓ Copied!" : "📋 Copy"}
               </button>

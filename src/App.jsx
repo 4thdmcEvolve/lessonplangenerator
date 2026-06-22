@@ -34,6 +34,8 @@ export default function App() {
   const [verificationRan, setVerificationRan] = useState(false);
   const [verificationType, setVerificationType] = useState("");
   const [computationalPassed, setComputationalPassed] = useState(null);
+  const [remaining, setRemaining] = useState(null);
+  const [limit, setLimit] = useState(null);
 
   const [unlocked, setUnlocked] = useState(
     typeof window !== "undefined" && localStorage.getItem("toolkit_unlocked") === "yes"
@@ -53,8 +55,11 @@ export default function App() {
         body: JSON.stringify({ password: pwInput.trim() }),
       });
       if (r.ok) {
+        const data = await r.json();
         localStorage.setItem("toolkit_password", pwInput.trim());
         localStorage.setItem("toolkit_unlocked", "yes");
+        setRemaining(data.remaining);
+        setLimit(data.limit);
         setUnlocked(true);
       } else {
         setAuthError("Incorrect password. Try again.");
@@ -99,6 +104,11 @@ export default function App() {
           setError("That password is no longer valid. Please re-enter.");
           return;
         }
+        if (json.error.code === "LIMIT_REACHED") {
+          setError(json.error.message);
+          setRemaining(0);
+          return;
+        }
         setError("Error: " + json.error.message); return;
       }
       if (!json.text) { setError("Nothing returned. Please try again."); return; }
@@ -106,6 +116,8 @@ export default function App() {
       setVerificationRan(json.verificationRan);
       setVerificationType(json.verificationType || "");
       setComputationalPassed(json.computationalPassed);
+      if (json.remaining !== undefined) setRemaining(json.remaining);
+      if (json.limit !== undefined) setLimit(json.limit);
     } catch (e) {
       setError("Request failed: " + e.message);
     } finally {
@@ -170,6 +182,12 @@ export default function App() {
     ...extra,
   });
 
+  const RemainingBadge = () => remaining !== null ? (
+    <div style={{ color: remaining <= 2 ? "#ffb066" : "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 1 }}>
+      {remaining} of {limit} generations left
+    </div>
+  ) : null;
+
   if (!unlocked) {
     return (
       <div style={{
@@ -193,7 +211,7 @@ export default function App() {
             Lesson Plan Generator
           </div>
           <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, marginBottom: 28, lineHeight: 1.5 }}>
-            Enter your access password to continue.
+            Enter your access code to continue.
           </div>
           <input
             type="password"
@@ -201,7 +219,7 @@ export default function App() {
             disabled={authChecking}
             onChange={(e) => { setPwInput(e.target.value); setAuthError(""); }}
             onKeyDown={(e) => { if (e.key === "Enter") tryUnlock(); }}
-            placeholder="Access password"
+            placeholder="Access code"
             style={{
               width: "100%", boxSizing: "border-box", padding: "13px 16px",
               background: "rgba(255,255,255,0.07)",
@@ -212,7 +230,7 @@ export default function App() {
           />
           {authError && (
             <div style={{ color: "#ff9090", fontSize: 12, marginBottom: 16, textAlign: "left" }}>
-              ⚠ {authError}
+              {authError}
             </div>
           )}
           <button
@@ -234,11 +252,19 @@ export default function App() {
     );
   }
 
+  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────
   if (!isDesktop) {
     return (
       <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${DARK}, ${NAVY})`, fontFamily: "'Segoe UI', system-ui, sans-serif", padding: "0 0 80px" }}>
 
-        <div style={{ textAlign: "center", padding: "40px 20px 28px" }}>
+        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontWeight: 900, fontSize: 14, color: "#fff", letterSpacing: 1 }}>
+            4THDMC <span style={{ color: GOLD }}>|</span> EVOLVE LLC
+          </div>
+          <RemainingBadge />
+        </div>
+
+        <div style={{ textAlign: "center", padding: "32px 20px 24px" }}>
           <div style={{ display: "inline-block", border: `1px solid ${GOLD}`, color: GOLD, fontSize: 10, letterSpacing: 4, padding: "5px 14px", marginBottom: 14, fontWeight: 700, borderRadius: 2 }}>
             4THDMC | EVOLVE LLC
           </div>
@@ -254,7 +280,7 @@ export default function App() {
         {!result && (
           <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px" }}>
             <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "24px 18px" }}>
-              <div style={{ color: GOLD, fontWeight: 700, fontSize: 12, letterSpacing: 3, textTransform: "uppercase", marginBottom: 22 }}>✦ Build Your Lesson Plan</div>
+              <div style={{ color: GOLD, fontWeight: 700, fontSize: 12, letterSpacing: 3, textTransform: "uppercase", marginBottom: 22 }}>Build Your Lesson Plan</div>
 
               <div style={{ marginBottom: 16 }}>
                 <Label text="Subject" required />
@@ -295,7 +321,7 @@ export default function App() {
                 borderRadius: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between"
               }}>
                 <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: 600 }}>
-                  ⚙️ Advanced Options
+                  Advanced Options
                 </span>
                 <span style={{ color: GOLD, fontSize: 14 }}>{showAdvanced ? "▲" : "▼"}</span>
               </button>
@@ -325,17 +351,17 @@ export default function App() {
 
               {error && <div style={{ background: "rgba(255,80,80,0.12)", border: "1px solid rgba(255,80,80,0.3)", color: "#ff9090", padding: "12px 14px", borderRadius: 8, fontSize: 14, marginBottom: 16 }}>{error}</div>}
 
-              <button onClick={generate} disabled={loading} style={{
-                width: "100%", padding: 18, background: loading ? "rgba(201,168,76,0.4)" : GOLD,
+              <button onClick={generate} disabled={loading || remaining === 0} style={{
+                width: "100%", padding: 18, background: (loading || remaining === 0) ? "rgba(201,168,76,0.4)" : GOLD,
                 color: DARK, border: "none", borderRadius: 10, fontWeight: 900,
-                fontSize: 17, letterSpacing: 2, cursor: loading ? "not-allowed" : "pointer", textTransform: "uppercase"
+                fontSize: 17, letterSpacing: 2, cursor: (loading || remaining === 0) ? "not-allowed" : "pointer", textTransform: "uppercase"
               }}>
-                {loading ? "⏳ Generating..." : "GENERATE LESSON PLAN"}
+                {loading ? "Generating..." : remaining === 0 ? "Monthly Limit Reached" : "GENERATE LESSON PLAN"}
               </button>
               <div style={{ textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>
                 {loading
                   ? "This can take up to a minute or two — it's running multiple accuracy checks behind the scenes. No need to refresh or click again."
-                  : "Generation includes built-in fact and math verification, so it may take longer than a typical AI tool (up to ~60–90 seconds)."}
+                  : "Generation includes built-in fact and math verification, so it may take longer than a typical AI tool (up to ~60-90 seconds)."}
               </div>
             </div>
           </div>
@@ -345,7 +371,7 @@ export default function App() {
           <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px" }}>
             <div style={{ background: "#fff", borderRadius: 16, padding: "24px 18px", boxShadow: "0 20px 50px rgba(0,0,0,0.5)" }}>
               <div style={{ marginBottom: 18, paddingBottom: 14, borderBottom: `2px solid ${GOLD}` }}>
-                <div style={{ display: "inline-block", background: "rgba(201,168,76,0.12)", border: `1px solid ${GOLD}`, color: GOLD, fontSize: 10, fontWeight: 700, letterSpacing: 2, padding: "4px 10px", borderRadius: 20, marginBottom: 8, textTransform: "uppercase" }}>✓ Ready to Use</div>
+                <div style={{ display: "inline-block", background: "rgba(201,168,76,0.12)", border: `1px solid ${GOLD}`, color: GOLD, fontSize: 10, fontWeight: 700, letterSpacing: 2, padding: "4px 10px", borderRadius: 20, marginBottom: 8, textTransform: "uppercase" }}>Ready to Use</div>
                 <div style={{ fontWeight: 900, fontSize: 19, color: NAVY, lineHeight: 1.2 }}>{topic}</div>
                 <div style={{ color: "#999", fontSize: 12, marginTop: 4 }}>{grade} Grade · {subject} · {duration} min</div>
               </div>
@@ -358,7 +384,7 @@ export default function App() {
               }}>
                 {!verificationRan && <span>No factual or computational content needed verification for this topic.</span>}
                 {verificationRan && computationalPassed === false && (
-                  <><strong>⚠ Math could not be independently verified.</strong> Simpler, generic examples were used instead. Review before using with students.</>
+                  <><strong>Math could not be independently verified.</strong> Simpler, generic examples were used instead. Review before using with students.</>
                 )}
                 {verificationRan && computationalPassed !== false && (
                   <><strong style={{ color: NAVY }}>
@@ -375,10 +401,10 @@ export default function App() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
                 <button onClick={copy} style={{ padding: 15, background: NAVY, color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-                  {copied ? "✓ Copied!" : "📋 Copy to Clipboard"}
+                  {copied ? "Copied!" : "Copy to Clipboard"}
                 </button>
                 <button onClick={reset} style={{ padding: 15, background: "transparent", color: NAVY, border: `1px solid ${NAVY}`, borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-                  ← New Lesson Plan
+                  New Lesson Plan
                 </button>
               </div>
             </div>
@@ -386,13 +412,14 @@ export default function App() {
         )}
 
         <div style={{ textAlign: "center", marginTop: 48, color: "rgba(255,255,255,0.18)", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", padding: "0 16px 24px" }}>
-          <div>© 2025 <span style={{ color: "rgba(201,168,76,0.55)" }}>4THDMC | EVOLVE LLC</span> · All Rights Reserved</div>
+          <div>© 2026 <span style={{ color: "rgba(201,168,76,0.55)" }}>4THDMC | EVOLVE LLC</span> · All Rights Reserved</div>
           <div style={{ marginTop: 6, fontSize: 9, letterSpacing: 2, color: "rgba(255,255,255,0.12)" }}>Brandon Russell · The Multiplier · Chattanooga, TN</div>
         </div>
       </div>
     );
   }
 
+  // ── DESKTOP LAYOUT ─────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${DARK} 0%, ${NAVY} 60%, ${DARK} 100%)`, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
 
@@ -400,8 +427,11 @@ export default function App() {
         <div style={{ fontWeight: 900, fontSize: 18, color: "#fff", letterSpacing: 1 }}>
           4THDMC <span style={{ color: GOLD }}>|</span> EVOLVE LLC
         </div>
-        <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, fontStyle: "italic" }}>
-          Lesson Plan Generator
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <RemainingBadge />
+          <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, fontStyle: "italic" }}>
+            Lesson Plan Generator
+          </div>
         </div>
       </div>
 
@@ -419,7 +449,7 @@ export default function App() {
           </div>
 
           <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: 28 }}>
-            <div style={{ color: GOLD, fontWeight: 700, fontSize: 12, letterSpacing: 3, textTransform: "uppercase", marginBottom: 24 }}>✦ Lesson Details</div>
+            <div style={{ color: GOLD, fontWeight: 700, fontSize: 12, letterSpacing: 3, textTransform: "uppercase", marginBottom: 24 }}>Lesson Details</div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div>
@@ -475,18 +505,18 @@ export default function App() {
               </div>
             )}
 
-            <button onClick={generate} disabled={loading} style={{
-              width: "100%", padding: "16px", background: loading ? "rgba(201,168,76,0.4)" : GOLD,
+            <button onClick={generate} disabled={loading || remaining === 0} style={{
+              width: "100%", padding: "16px", background: (loading || remaining === 0) ? "rgba(201,168,76,0.4)" : GOLD,
               color: DARK, border: "none", borderRadius: 8, fontWeight: 900,
-              fontSize: 16, letterSpacing: 3, cursor: loading ? "not-allowed" : "pointer", textTransform: "uppercase",
-              transition: "all 0.2s", boxShadow: loading ? "none" : "0 4px 20px rgba(201,168,76,0.25)"
+              fontSize: 16, letterSpacing: 3, cursor: (loading || remaining === 0) ? "not-allowed" : "pointer", textTransform: "uppercase",
+              transition: "all 0.2s", boxShadow: (loading || remaining === 0) ? "none" : "0 4px 20px rgba(201,168,76,0.25)"
             }}>
-              {loading ? "⏳  Generating Your Lesson Plan..." : "GENERATE LESSON PLAN"}
+              {loading ? "Generating Your Lesson Plan..." : remaining === 0 ? "Monthly Limit Reached" : "GENERATE LESSON PLAN"}
             </button>
             <div style={{ textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>
               {loading
                 ? "This can take up to a minute or two — it's running multiple accuracy checks behind the scenes. No need to refresh or click again."
-                : "Generation includes built-in fact and math verification, so it may take longer than a typical AI tool (up to ~60–90 seconds)."}
+                : "Generation includes built-in fact and math verification, so it may take longer than a typical AI tool (up to ~60-90 seconds)."}
             </div>
           </div>
         </div>
@@ -495,7 +525,7 @@ export default function App() {
           <div style={{ background: "#fff", borderRadius: 14, padding: "32px 28px", boxShadow: "0 24px 60px rgba(0,0,0,0.4)", position: "sticky", top: 24, maxHeight: "85vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, paddingBottom: 16, borderBottom: `2px solid ${GOLD}`, flexWrap: "wrap", gap: 10 }}>
               <div>
-                <div style={{ background: "rgba(201,168,76,0.12)", border: `1px solid ${GOLD}`, color: GOLD, fontSize: 10, fontWeight: 700, letterSpacing: 2, padding: "4px 10px", borderRadius: 20, marginBottom: 8, display: "inline-block", textTransform: "uppercase" }}>✓ Ready to Use</div>
+                <div style={{ background: "rgba(201,168,76,0.12)", border: `1px solid ${GOLD}`, color: GOLD, fontSize: 10, fontWeight: 700, letterSpacing: 2, padding: "4px 10px", borderRadius: 20, marginBottom: 8, display: "inline-block", textTransform: "uppercase" }}>Ready to Use</div>
                 <div style={{ fontWeight: 900, fontSize: 20, color: NAVY, lineHeight: 1.2 }}>{topic}</div>
                 <div style={{ color: "#999", fontSize: 12, marginTop: 4 }}>{grade} Grade · {subject} · {duration} min</div>
               </div>
@@ -511,7 +541,7 @@ export default function App() {
             }}>
               {!verificationRan && <span>No factual or computational content needed verification for this topic.</span>}
               {verificationRan && computationalPassed === false && (
-                <><strong>⚠ Math could not be independently verified.</strong> Simpler, generic examples were used instead. Review before using with students.</>
+                <><strong>Math could not be independently verified.</strong> Simpler, generic examples were used instead. Review before using with students.</>
               )}
               {verificationRan && computationalPassed !== false && (
                 <><strong style={{ color: NAVY }}>
@@ -530,10 +560,10 @@ export default function App() {
 
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
               <button onClick={copy} style={{ flex: 1, padding: "12px 16px", background: NAVY, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", letterSpacing: 1, textTransform: "uppercase" }}>
-                {copied ? "✓ Copied!" : "📋 Copy"}
+                {copied ? "Copied!" : "Copy"}
               </button>
               <button onClick={reset} style={{ flex: 1, padding: "12px 16px", background: "transparent", color: NAVY, border: `1px solid ${NAVY}`, borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", textTransform: "uppercase" }}>
-                ← Reset
+                Reset
               </button>
             </div>
           </div>
@@ -541,7 +571,7 @@ export default function App() {
       </div>
 
       <div style={{ textAlign: "center", paddingBottom: 32, color: "rgba(255,255,255,0.18)", fontSize: 10, letterSpacing: 3, textTransform: "uppercase" }}>
-        <div>© 2025 <span style={{ color: "rgba(201,168,76,0.55)" }}>4THDMC | EVOLVE LLC</span> · All Rights Reserved</div>
+        <div>© 2026 <span style={{ color: "rgba(201,168,76,0.55)" }}>4THDMC | EVOLVE LLC</span> · All Rights Reserved</div>
         <div style={{ marginTop: 6, fontSize: 9, letterSpacing: 2, color: "rgba(255,255,255,0.12)" }}>Brandon Russell · The Multiplier · Chattanooga, TN</div>
       </div>
     </div>

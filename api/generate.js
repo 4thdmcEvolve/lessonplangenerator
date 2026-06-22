@@ -3,7 +3,10 @@
 //
 // SETUP IN VERCEL (Settings → Environment Variables):
 //   ANTHROPIC_API_KEY = your rotated Anthropic API key
-//   TOOLKIT_PASSWORD  = ToolkitEvolve2026 (this tool's existing password — unchanged)
+//   KV_REST_API_URL   = from Upstash dashboard
+//   KV_REST_API_TOKEN = from Upstash dashboard
+//
+// NOTE: TOOLKIT_PASSWORD env var is no longer used. Remove it from Vercel.
 //
 // IMPORTANT: This is a DEDICATED endpoint for Lesson Plan Generator only.
 // It is NOT the shared universal generate.js used by Assignment Grader,
@@ -51,23 +54,7 @@
 // serverless function, so that export is silently ignored here. See
 // vercel.json for the actual timeout configuration.
 
-const rateLimitStore = new Map();
-const MAX_REQUESTS_PER_WINDOW = 40;
-const WINDOW_MS = 60 * 60 * 1000;
-
-function checkRateLimit(key) {
-  const now = Date.now();
-  const record = rateLimitStore.get(key);
-  if (!record || now > record.resetAt) {
-    rateLimitStore.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    return { allowed: true };
-  }
-  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
-    return { allowed: false, resetAt: record.resetAt };
-  }
-  record.count += 1;
-  return { allowed: true };
-}
+import { Redis } from '@upstash/redis';
 
 async function callAnthropic({ model, maxTokens, prompt, useWebSearch }) {
   const body = {
@@ -103,23 +90,66 @@ export default async function handler(req, res) {
 
   const { toolkitPassword, subject, grade, topic, duration, learningStyle, standard, extras } = req.body || {};
 
-  const expected = process.env.TOOLKIT_PASSWORD;
-  if (!expected) {
-    return res.status(500).json({ error: { message: "Server configuration error: TOOLKIT_PASSWORD not set" } });
+  // ── SUBSCRIBER VALIDATION VIA REDIS ───────────────────────────────────
+  if (!toolkitPassword) {
+    return res.status(401).json({ error: { message: "Access code required.", code: "AUTH_REQUIRED" } });
   }
-  if (!toolkitPassword || toolkitPassword !== expected) {
-    return res.status(401).json({ error: { message: "Invalid or missing access password.", code: "AUTH_REQUIRED" } });
+
+  const redisUrl = process.env.KV_REST_API_URL;
+  const redisToken = process.env.KV_REST_API_TOKEN;
+
+  if (!redisUrl || !redisToken) {
+    return res.status(500).json({ error: { message: "Server configuration error." } });
   }
+
   if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: { message: "Server configuration error: ANTHROPIC_API_KEY not set" } });
+    return res.status(500).json({ error: { message: "Server configuration error: ANTHROPIC_API_KEY not set." } });
   }
 
-  const limit = checkRateLimit(toolkitPassword);
-  if (!limit.allowed) {
-    const minutes = Math.ceil((limit.resetAt - Date.now()) / 60000);
-    return res.status(429).json({ error: { message: `Rate limit reached. Try again in about ${minutes} minute(s).` } });
+  const redis = new Redis({ url: redisUrl, token: redisToken });
+  const key = 'subscriber:' + toolkitPassword.trim().toLowerCase();
+
+  let record;
+  try {
+    const raw = await redis.get(key);
+
+    if (raw === null || raw === undefined) {
+      return res.status(401).json({ error: { message: "Invalid or expired access code.", code: "AUTH_REQUIRED" } });
+    }
+
+    if (typeof raw === 'string') {
+      try { record = JSON.parse(raw); } catch (e) { record = null; }
+    } else {
+      record = raw;
+    }
+
+    if (!record || typeof record.limit === 'undefined') {
+      return res.status(500).json({ error: { message: "Account data error. Contact brandon@4thdmc.com." } });
+    }
+
+    // Reset usage if the monthly window has passed
+    const now = Date.now();
+    if (now > record.resetAt) {
+      record.used = 0;
+      record.resetAt = now + 30 * 24 * 60 * 60 * 1000;
+      await redis.set(key, JSON.stringify(record));
+    }
+
+    // Check limit
+    if (record.used >= record.limit) {
+      return res.status(429).json({
+        error: {
+          message: `You've used all ${record.limit} generations for this month. Your limit resets on ${new Date(record.resetAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`,
+          code: "LIMIT_REACHED",
+        }
+      });
+    }
+
+  } catch (err) {
+    return res.status(500).json({ error: { message: "Server error during validation. Please try again." } });
   }
 
+  // ── INPUT VALIDATION ──────────────────────────────────────────────────
   if (!subject || !grade || !topic) {
     return res.status(400).json({ error: { message: "Subject, Grade Level, and Topic are required." } });
   }
@@ -128,8 +158,6 @@ export default async function handler(req, res) {
 
   try {
     // ── STEP 1: PLANNING PASS ──────────────────────────────────────────
-    // Unlike Activity Generator, there is no existing content to scan.
-    // This pass infers what a lesson on this topic would likely need.
     const planPrompt = `A teacher wants a lesson plan with the details below. Before writing the lesson, predict what specific factual or computational content it would likely need — regardless of subject area.
 
 For each likely claim or example, classify it as exactly one of:
@@ -321,6 +349,18 @@ Be specific, practical, and immediately usable. Complete every section.`;
       return res.status(500).json({ error: { message: "Nothing was generated. Please try again." } });
     }
 
+    // ── DECREMENT USAGE IN REDIS ───────────────────────────────────────
+    // Only decrement after a successful generation
+    try {
+      record.used += 1;
+      await redis.set(key, JSON.stringify(record));
+    } catch (err) {
+      // Don't fail the response if the decrement fails — generation succeeded
+      console.error("Failed to decrement usage:", err);
+    }
+
+    const remaining = record.limit - record.used;
+
     const verificationType = hasFactual && hasComputational
       ? "both"
       : hasFactual
@@ -335,7 +375,10 @@ Be specific, practical, and immediately usable. Complete every section.`;
       verificationType,
       computationalPassed: hasComputational ? computationalPassed : null,
       verificationNotes: verificationBlock,
+      remaining,
+      limit: record.limit,
     });
+
   } catch (error) {
     return res.status(500).json({ error: { message: "Proxy error: " + error.message } });
   }
